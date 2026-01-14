@@ -1,0 +1,286 @@
+--============================================================
+-- TixyHub - Universal Default Script (2026 Fixed)
+--============================================================
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local GameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown Game"
+
+--============================================================
+-- Window Setup
+--============================================================
+local MainWindow = Rayfield:CreateWindow({
+	Name = "TixyHub | Cant Find This Game",
+	LoadingTitle = "Loading...",
+	LoadingSubtitle = "by TiXY",
+	ToggleUIKeybind = "K",
+	ConfigurationSaving = { Enabled = true, FileName = "TixyHub" },
+	KeySystem = false
+})
+
+local MainTab = MainWindow:CreateTab("Main")
+local ConfigTab = MainWindow:CreateTab("Config")
+
+--============================================================
+-- Variables
+--============================================================
+local FlySpeed = 120
+local WalkSpeedValue = 16
+local JumpPowerValue = 50
+local InfiniteJumpEnabled = false
+local Flying = false
+local FlyConn
+local NoclipEnabled = false
+local NoclipConnection
+
+--============================================================
+-- Helpers
+--============================================================
+local function getChar()
+	return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+end
+
+local function getHumanoid()
+	return getChar():FindFirstChildOfClass("Humanoid")
+end
+
+local function getHRP()
+	return getChar():WaitForChild("HumanoidRootPart")
+end
+
+--============================================================
+-- Warning Message
+--============================================================
+MainTab:CreateLabel("TixyHub Cant Find This Game")
+Rayfield:Notify({
+	Title = "TixyHub",
+	Content = "TixyHub Cant Find This Game",
+	Duration = 12,
+	Image = 4483362458
+})
+
+--============================================================
+-- Fly System
+--============================================================
+local function cleanupFly(hrp)
+	for _, v in ipairs(hrp:GetChildren()) do
+		if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
+			v:Destroy()
+		end
+	end
+end
+
+local function setFly(enabled)
+	local hrp = getHRP()
+	if enabled then
+		Flying = true
+		cleanupFly(hrp)
+
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+		bv.Velocity = Vector3.zero
+		bv.Parent = hrp
+
+		local bg = Instance.new("BodyGyro")
+		bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+		bg.P = 9000
+		bg.CFrame = workspace.CurrentCamera.CFrame
+		bg.Parent = hrp
+
+		FlyConn = RunService.RenderStepped:Connect(function()
+			if not Flying then
+				FlyConn:Disconnect()
+				cleanupFly(hrp)
+				return
+			end
+
+			local cam = workspace.CurrentCamera
+			local move = Vector3.zero
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+
+			if move.Magnitude > 0 then move = move.Unit * FlySpeed end
+			bv.Velocity = move
+			bg.CFrame = cam.CFrame
+		end)
+	else
+		Flying = false
+		if FlyConn then FlyConn:Disconnect() end
+		cleanupFly(hrp)
+	end
+end
+
+MainTab:CreateToggle({
+	Name = "Fly",
+	CurrentValue = false,
+	Callback = function(v)
+		setFly(v)
+		Rayfield:Notify({
+			Title = "Fly",
+			Content = v and "Enabled!" or "Disabled!",
+			Duration = 3
+		})
+	end
+})
+
+--============================================================
+-- Movement Controls
+--============================================================
+MainTab:CreateSection("Movement Controls")
+
+MainTab:CreateToggle({
+	Name = "Infinite Jump",
+	CurrentValue = false,
+	Callback = function(v)
+		InfiniteJumpEnabled = v
+	end
+})
+
+UserInputService.JumpRequest:Connect(function()
+	if InfiniteJumpEnabled then
+		local hum = getHumanoid()
+		if hum then hum:ChangeState("Jumping") end
+	end
+end)
+
+MainTab:CreateToggle({
+	Name = "Noclip",
+	CurrentValue = false,
+	Callback = function(v)
+		NoclipEnabled = v
+		if v then
+			NoclipConnection = RunService.Stepped:Connect(function()
+				if LocalPlayer.Character then
+					for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+						if part:IsA("BasePart") then part.CanCollide = false end
+					end
+				end
+			end)
+		else
+			if NoclipConnection then NoclipConnection:Disconnect() end
+			if LocalPlayer.Character then
+				for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+					if part:IsA("BasePart") then part.CanCollide = true end
+				end
+			end
+		end
+	end
+})
+
+MainTab:CreateSlider({
+	Name = "WalkSpeed",
+	Range = {16, 250},
+	Increment = 5,
+	CurrentValue = WalkSpeedValue,
+	Callback = function(v)
+		WalkSpeedValue = v
+		local hum = getHumanoid()
+		if hum then hum.WalkSpeed = v end
+	end
+})
+
+MainTab:CreateSlider({
+	Name = "JumpPower",
+	Range = {50, 500},
+	Increment = 10,
+	CurrentValue = JumpPowerValue,
+	Callback = function(v)
+		JumpPowerValue = v
+		local hum = getHumanoid()
+		if hum then hum.JumpPower = v end
+	end
+})
+
+--============================================================
+-- Teleport System
+--============================================================
+MainTab:CreateSection("Teleport")
+
+local SelectedPlayer = ""
+
+local Dropdown = MainTab:CreateDropdown({
+	Name = "Select Player",
+	Options = {},
+	CurrentOption = {""},
+	MultipleOptions = false,
+	Callback = function(opt)
+		SelectedPlayer = opt[1]
+	end
+})
+
+local function UpdatePlayerList()
+	local list = {}
+	for _, v in pairs(Players:GetPlayers()) do
+		if v.Name ~= LocalPlayer.Name then
+			table.insert(list, v.Name)
+		end
+	end
+	Dropdown:Refresh(list, true)
+end
+
+Players.PlayerAdded:Connect(UpdatePlayerList)
+Players.PlayerRemoving:Connect(UpdatePlayerList)
+UpdatePlayerList()
+
+MainTab:CreateButton({
+	Name = "Teleport to Selected Player",
+	Callback = function()
+		local target = Players:FindFirstChild(SelectedPlayer)
+		if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+			LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
+		else
+			Rayfield:Notify({
+				Title = "Error",
+				Content = "Player not found or not loaded.",
+				Duration = 3
+			})
+		end
+	end
+})
+
+--============================================================
+-- Config Tab
+--============================================================
+ConfigTab:CreateSlider({
+	Name = "Fly Speed",
+	Range = {50, 500},
+	Increment = 10,
+	CurrentValue = FlySpeed,
+	Callback = function(v)
+		FlySpeed = v
+	end
+})
+
+ConfigTab:CreateButton({
+	Name = "Kill TixyHub",
+	Callback = function()
+		for i = 3,1,-1 do
+			Rayfield:Notify({
+				Title = "TixyHub",
+				Content = "Killing TixyHub in " .. i,
+				Duration = 1.5,
+				Image = 4483362458
+			})
+			task.wait(1.5)
+		end
+		Rayfield:Destroy()
+	end
+})
+
+--============================================================
+-- Final Notification
+--============================================================
+Rayfield:Notify({
+	Title = "TixyHub",
+	Content = "Loaded Successfully on: " .. GameName,
+	Duration = 5
+})
