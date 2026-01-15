@@ -39,7 +39,7 @@ local MainWindow = Rayfield:CreateWindow({
 		FileName = "TixyHubKey",
 		SaveKey = true,
 		GrabKeyFromSite = true,
-		Key = {""} --Grab from raw website & put key here
+		Key = {"https://raw.githubusercontent.com/TiXYgit/TixyHub/refs/heads/main/Key"} --Grab from raw website & put key here
 	}
 })
 
