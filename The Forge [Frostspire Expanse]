@@ -1,0 +1,366 @@
+--============================================================
+-- Frostspire Auto-Farm (2026) - FINAL STABLE VERSION
+-- FARM ALL SpawnLocations + AUTO EQUIP + AUTO MINE UNTIL DONE
+-- Path: workspace.Rocks.Island3RedCave
+--============================================================
+
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+------------------------------------------------------------
+-- UI Setup
+------------------------------------------------------------
+local Window = Rayfield:CreateWindow({
+	Name = "TixyHub | The Forge [Frostspire Expanse]",
+	LoadingTitle = "Loading...",
+	LoadingSubtitle = "By TiXY",
+	ConfigurationSaving = { Enabled = true, FolderName = "ForgeScripts", FileName = "Frostspire" }
+})
+
+local MainTab = Window:CreateTab("Farm Settings", 4483362458)
+local ConfigTab = Window:CreateTab("Config", 4483362458)
+
+------------------------------------------------------------
+-- References
+------------------------------------------------------------
+local RocksFolder = workspace:WaitForChild("Rocks"):WaitForChild("Island3RedCave")
+
+local KnitRoot = ReplicatedStorage:WaitForChild("Shared")
+	:WaitForChild("Packages"):WaitForChild("Knit")
+	:WaitForChild("Services")
+
+local InventoryEvent = KnitRoot.InventoryService.RE.Event
+local ToolActivatedRF = KnitRoot.ToolService.RF.ToolActivated
+
+------------------------------------------------------------
+-- Variables
+------------------------------------------------------------
+local AutoFarmEnabled = false
+local MoveSpeed = 120
+local LandOffset = 1.5          -- stand near rock instead of hovering
+local SwingDelay = 0.25         -- delay between mining swings
+local MineTimeout = 10          -- max seconds per rock (safety)
+local StartCFrame
+
+local activeTween, applyConn, cfValue, holdConn, noclipConn
+
+------------------------------------------------------------
+-- Utility
+------------------------------------------------------------
+local function notify(title, content, dur)
+	Rayfield:Notify({ Title = title, Content = content, Duration = dur or 3 })
+end
+
+local function getChar()
+	return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+end
+
+local function getHRP()
+	local c = getChar()
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function getHum()
+	local c = getChar()
+	return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function setNoclip(on)
+	if on then
+		if noclipConn then noclipConn:Disconnect() end
+		noclipConn = RunService.Stepped:Connect(function()
+			local c = LocalPlayer.Character
+			if not c then return end
+			for _, p in ipairs(c:GetDescendants()) do
+				if p:IsA("BasePart") then p.CanCollide = false end
+			end
+		end)
+	else
+		if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+		local c = LocalPlayer.Character
+		if c then
+			for _, p in ipairs(c:GetDescendants()) do
+				if p:IsA("BasePart") then p.CanCollide = true end
+			end
+		end
+	end
+end
+
+local function stopMotion()
+	if applyConn then applyConn:Disconnect() applyConn = nil end
+	if activeTween then pcall(function() activeTween:Cancel() end) activeTween = nil end
+	if cfValue then pcall(function() cfValue:Destroy() end) cfValue = nil end
+	if holdConn then holdConn:Disconnect() holdConn = nil end
+
+	local hrp = getHRP()
+	if hrp then
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+	end
+
+	local hum = getHum()
+	if hum then
+		pcall(function() hum.PlatformStand = false end)
+		pcall(function() hum.AutoRotate = true end)
+	end
+end
+
+------------------------------------------------------------
+-- Movement
+------------------------------------------------------------
+local function moveTo(pos)
+	local hrp = getHRP()
+	if not hrp then return false end
+
+	stopMotion()
+
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+
+	cfValue = Instance.new("CFrameValue")
+	cfValue.Value = hrp.CFrame
+
+	applyConn = RunService.Heartbeat:Connect(function()
+		if hrp and cfValue then hrp.CFrame = cfValue.Value end
+	end)
+
+	local dist = (hrp.Position - pos).Magnitude
+	local duration = math.clamp(dist / math.max(MoveSpeed, 1), 0.08, 12)
+
+	activeTween = TweenService:Create(
+		cfValue,
+		TweenInfo.new(duration, Enum.EasingStyle.Linear),
+		{ Value = CFrame.new(pos) }
+	)
+
+	activeTween:Play()
+	activeTween.Completed:Wait()
+
+	-- stop tween apply, keep stable
+	if applyConn then applyConn:Disconnect() applyConn = nil end
+	if cfValue then cfValue:Destroy() cfValue = nil end
+	activeTween = nil
+
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	return true
+end
+
+-- Hold player in place while mining (prevents falling with noclip ON)
+local function startHold()
+	local hrp = getHRP()
+	if not hrp then return end
+
+	if holdConn then holdConn:Disconnect() end
+	local locked = hrp.CFrame
+
+	holdConn = RunService.Heartbeat:Connect(function()
+		if hrp then
+			hrp.CFrame = locked
+			hrp.AssemblyLinearVelocity = Vector3.zero
+			hrp.AssemblyAngularVelocity = Vector3.zero
+		end
+	end)
+end
+
+local function stopHold()
+	if holdConn then holdConn:Disconnect() holdConn = nil end
+end
+
+------------------------------------------------------------
+-- Tool / Mining
+------------------------------------------------------------
+local function equipPickaxe()
+	local args = {{
+		"Pickaxe",
+		"Weapon",
+		"AttackDamagePotion1",
+		"PortalTool",
+		"FungisMushroom",
+		"",
+		"LuckPotion1",
+		"SimpleLantern",
+		"MinerPotion1",
+		"",
+		"",
+		"Inventory"
+	}}
+	pcall(function()
+		InventoryEvent:FireServer(unpack(args))
+	end)
+end
+
+local function mineOnce()
+	pcall(function()
+		ToolActivatedRF:InvokeServer("Pickaxe")
+	end)
+end
+
+-- ✅ Mine repeatedly until rock finishes (spawn children empty) or timeout
+local function mineUntilDone(spawn)
+	if not spawn or not spawn.Parent then return end
+
+	startHold()
+
+	local start = tick()
+	while AutoFarmEnabled and spawn and spawn.Parent and (tick() - start) < MineTimeout do
+		-- if rock is gone / finished
+		if #spawn:GetChildren() == 0 then
+			break
+		end
+
+		equipPickaxe()
+		task.wait(0.05)
+
+		mineOnce()
+		task.wait(SwingDelay)
+	end
+
+	stopHold()
+end
+
+------------------------------------------------------------
+-- Farm Targets
+------------------------------------------------------------
+local function getSpawnLocations()
+	local list = {}
+	for _, obj in ipairs(RocksFolder:GetDescendants()) do
+		if obj:IsA("BasePart") and obj.Name == "SpawnLocation" then
+			table.insert(list, obj)
+		end
+	end
+	return list
+end
+
+------------------------------------------------------------
+-- UI Controls
+------------------------------------------------------------
+MainTab:CreateSlider({
+	Name = "Move Speed",
+	Range = {25, 400},
+	Increment = 5,
+	Suffix = "studs/s",
+	CurrentValue = MoveSpeed,
+	Flag = "MoveSpeed",
+	Callback = function(v) MoveSpeed = v end,
+})
+
+MainTab:CreateSlider({
+	Name = "Land Offset",
+	Range = {0, 6},
+	Increment = 0.1,
+	Suffix = "studs",
+	CurrentValue = LandOffset,
+	Flag = "LandOffset",
+	Callback = function(v) LandOffset = v end,
+})
+
+MainTab:CreateSlider({
+	Name = "Swing Delay",
+	Range = {0.05, 1},
+	Increment = 0.05,
+	Suffix = "sec",
+	CurrentValue = SwingDelay,
+	Flag = "SwingDelay",
+	Callback = function(v) SwingDelay = v end,
+})
+
+MainTab:CreateSlider({
+	Name = "Mine Timeout",
+	Range = {2, 30},
+	Increment = 1,
+	Suffix = "sec",
+	CurrentValue = MineTimeout,
+	Flag = "MineTimeout",
+	Callback = function(v) MineTimeout = v end,
+})
+
+MainTab:CreateToggle({
+	Name = "Auto Farm + Auto Mine (All SpawnLocations)",
+	CurrentValue = false,
+	Flag = "AutoFarm",
+	Callback = function(enabled)
+		AutoFarmEnabled = enabled
+
+		if not enabled then
+			stopHold()
+			stopMotion()
+			setNoclip(false)
+			notify("Farm", "Stopped safely.", 3)
+			return
+		end
+
+		setNoclip(true)
+
+		local hrp = getHRP()
+		if hrp then StartCFrame = hrp.CFrame end
+
+		task.spawn(function()
+			local idx = 1
+			local spawns = getSpawnLocations()
+			local lastRefresh = tick()
+
+			if #spawns == 0 then
+				notify("Farm", "No SpawnLocation parts found in Island3RedCave.", 6)
+			end
+
+			while AutoFarmEnabled do
+				-- refresh list every 2s in case of respawns/changes
+				if tick() - lastRefresh > 2 then
+					spawns = getSpawnLocations()
+					lastRefresh = tick()
+					if idx > #spawns then idx = 1 end
+				end
+
+				if #spawns > 0 then
+					if idx > #spawns then idx = 1 end
+					local spawn = spawns[idx]
+
+					if spawn and spawn.Parent then
+						-- land near the spawn (not hovering)
+						local landPos = Vector3.new(
+							spawn.Position.X,
+							spawn.Position.Y + LandOffset,
+							spawn.Position.Z
+						)
+
+						moveTo(landPos)
+						task.wait(0.05)
+
+						-- mine until done
+						mineUntilDone(spawn)
+					end
+
+					idx += 1
+				end
+
+				task.wait(0.1)
+			end
+		end)
+	end,
+})
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+ConfigTab:CreateButton({
+	Name = "Emergency Stop",
+	Callback = function()
+		AutoFarmEnabled = false
+		stopHold()
+		stopMotion()
+		setNoclip(false)
+		notify("Farm", "Emergency stop executed.", 3)
+	end,
+})
+
+Rayfield:Notify({
+	Title = "Frostspire Auto-Farm",
+	Content = "✅ Loaded — mines repeatedly until the rock finishes.",
+	Duration = 5
+})
