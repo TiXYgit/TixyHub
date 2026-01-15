@@ -23,7 +23,7 @@ pcall(function()
 end)
 
 -----------------------------------------------------------
--- Window Setup
+-- Window Setup (with Key System)
 -----------------------------------------------------------
 local MainWindow = Rayfield:CreateWindow({
 	Name = "TixyHub | Broken Bones IV - Ragdoll Sim",
@@ -31,9 +31,21 @@ local MainWindow = Rayfield:CreateWindow({
 	LoadingSubtitle = "by TiXY",
 	ToggleUIKeybind = "K",
 	ConfigurationSaving = { Enabled = true, FileName = "TixyHub" },
-	KeySystem = false
+	KeySystem = true,
+	KeySettings = {
+		Title = "TixyHub | Key System",
+		Subtitle = "Authentication Required",
+		Note = "Get your key from: https://docs.sirius.menu/rayfield",
+		FileName = "TixyHubKey",
+		SaveKey = true,
+		GrabKeyFromSite = true,
+		Key = {""} --Grab from raw website & put key here
+	}
 })
 
+-----------------------------------------------------------
+-- Tabs
+-----------------------------------------------------------
 local MainTab = MainWindow:CreateTab("Auto Farm", 4483362458)
 local PlayerTab = MainWindow:CreateTab("Player")
 local ConfigTab = MainWindow:CreateTab("Config")
@@ -50,7 +62,8 @@ local FlyConn
 local NoclipEnabled = false
 local NoclipConnection
 local HighlightEnabled = false
-local HighlightObject
+local HighlightColor = Color3.fromRGB(255,255,0)
+local HighlightRefreshLoop
 
 local function getChar() return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() end
 local function getHumanoid() return getChar():FindFirstChildOfClass("Humanoid") end
@@ -65,7 +78,6 @@ MainTab:CreateDropdown({
 	Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
 	CurrentOption = {"Basalt"},
 	MultiSelection = true,
-	Flag = "RockSelector",
 	Callback = function(Options)
 		TargetRocks = Options
 	end,
@@ -75,7 +87,6 @@ local FarmingEnabled = false
 MainTab:CreateToggle({
 	Name = "Enable Auto Farm",
 	CurrentValue = false,
-	Flag = "FarmToggle",
 	Callback = function(Value)
 		FarmingEnabled = Value
 		task.spawn(function()
@@ -100,6 +111,60 @@ MainTab:CreateButton({
 			LocalPlayer.Character:BreakJoints()
 		end
 	end,
+})
+
+-----------------------------------------------------------
+-- Highlight System (All Players + Color Picker)
+-----------------------------------------------------------
+local function applyHighlights()
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			local h = p.Character:FindFirstChild("TixyHighlight")
+			if not h then
+				h = Instance.new("Highlight")
+				h.Name = "TixyHighlight"
+				h.FillTransparency = 0.5
+				h.OutlineColor = Color3.fromRGB(255,255,255)
+				h.Parent = p.Character
+			end
+			h.FillColor = HighlightColor
+		end
+	end
+end
+
+local function clearHighlights()
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			local h = p.Character:FindFirstChild("TixyHighlight")
+			if h then h:Destroy() end
+		end
+	end
+end
+
+PlayerTab:CreateToggle({
+	Name = "Highlight All Players",
+	CurrentValue = false,
+	Callback = function(v)
+		HighlightEnabled = v
+		if v then
+			if HighlightRefreshLoop then HighlightRefreshLoop:Disconnect() end
+			HighlightRefreshLoop = RunService.Heartbeat:Connect(function()
+				if HighlightEnabled then applyHighlights() end
+			end)
+		else
+			if HighlightRefreshLoop then HighlightRefreshLoop:Disconnect() HighlightRefreshLoop = nil end
+			clearHighlights()
+		end
+	end
+})
+
+ConfigTab:CreateColorPicker({
+	Name = "Highlight Color",
+	Color = HighlightColor,
+	Callback = function(color)
+		HighlightColor = color
+		if HighlightEnabled then applyHighlights() end
+	end
 })
 
 -----------------------------------------------------------
@@ -153,38 +218,6 @@ PlayerTab:CreateToggle({
 	Callback = function(v)
 		setFly(v)
 		Rayfield:Notify({ Title = "Fly", Content = v and "Enabled!" or "Disabled!", Duration = 3 })
-	end
-})
-
------------------------------------------------------------
--- Highlight System
------------------------------------------------------------
-PlayerTab:CreateToggle({
-	Name = "Highlight Player",
-	CurrentValue = false,
-	Callback = function(v)
-		HighlightEnabled = v
-		if v then
-			if not HighlightObject then
-				HighlightObject = Instance.new("Highlight")
-				HighlightObject.FillColor = Color3.fromRGB(255, 255, 0)
-				HighlightObject.FillTransparency = 0.5
-				HighlightObject.OutlineColor = Color3.fromRGB(255, 255, 255)
-				HighlightObject.Parent = getChar()
-			end
-		else
-			if HighlightObject then HighlightObject:Destroy(); HighlightObject = nil end
-		end
-	end
-})
-
-ConfigTab:CreateColorPicker({
-	Name = "Highlight Color",
-	Color = Color3.fromRGB(255, 255, 0),
-	Callback = function(color)
-		if HighlightObject then
-			HighlightObject.FillColor = color
-		end
 	end
 })
 
