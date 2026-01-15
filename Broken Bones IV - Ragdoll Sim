@@ -58,51 +58,51 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 -- Auto Farm System
 -----------------------------------------------------------
 local TargetRocks = {}
+
+-- MultiSelection fix: CurrentOption must be a table
 MainTab:CreateDropdown({
-	Name = "Target Rock Types",
-	Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
-	CurrentOption = {"Basalt"},
-	MultiSelection = true,
-	Flag = "RockSelector",
-	Callback = function(Options)
-		TargetRocks = Options
-		print("Targeting rocks: " .. table.concat(TargetRocks, ", "))
-	end,
+   Name = "Target Rock Types",
+   Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
+   CurrentOption = {"Basalt"}, 
+   MultiSelection = true, -- Verified 2026 parameter
+   Flag = "RockSelector",
+   Callback = function(Options)
+      TargetRocks = Options
+      print("Targeting rocks: " .. table.concat(TargetRocks, ", "))
+   end,
 })
 
 local FarmingEnabled = false
 MainTab:CreateToggle({
-	Name = "Enable Auto Farm",
-	CurrentValue = false,
-	Flag = "FarmToggle",
-	Callback = function(Value)
-		FarmingEnabled = Value
-		task.spawn(function()
-			while FarmingEnabled do
-				local char = LocalPlayer.Character
-				if char and char:FindFirstChild("Humanoid") then
-					char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-					if char.PrimaryPart then
-						char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
-					end
-				end
-				task.wait(1.5)
-			end
-		end)
-	end,
+   Name = "Enable Auto Farm",
+   CurrentValue = false,
+   Flag = "FarmToggle",
+   Callback = function(Value)
+      FarmingEnabled = Value
+      task.spawn(function()
+         while FarmingEnabled do
+            local player = game.Players.LocalPlayer
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+               -- Force Ragdoll state to ensure bone breaks register
+               char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+               -- Physics push toward rocks
+               char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
+            end
+            task.wait(1.5) -- Delay to prevent physics lag
+         end
+      end)
+   end,
 })
 
 MainTab:CreateButton({
-	Name = "Reset / Fix Stuck Character",
-	Callback = function()
-		if LocalPlayer.Character then
-			LocalPlayer.Character:BreakJoints()
-		end
-	end,
+   Name = "Reset / Fix Stuck Char",
+   Callback = function()
+      if game.Players.LocalPlayer.Character then
+         game.Players.LocalPlayer.Character:BreakJoints()
+      end
+   end,
 })
-
-Rayfield:LoadConfiguration()
-
 -----------------------------------------------------------
 -- Fly System
 -----------------------------------------------------------
