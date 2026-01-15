@@ -22,8 +22,9 @@ local Window = Rayfield:CreateWindow({
 	ConfigurationSaving = { Enabled = true, FolderName = "ForgeScripts", FileName = "Frostspire" }
 })
 
-local MainTab = Window:CreateTab("Farm Settings", 4483362458)
-local ConfigTab = Window:CreateTab("Config", 4483362458)
+local MainTab = Window:CreateTab("Farm", 4483362458) -- Title, Image
+local MiscTab = Window:CreateTab("Misc", 4483362458) -- Title, Image
+local ConfigTab = Window:CreateTab("Config", 4483362458) -- Title, Image
 
 ------------------------------------------------------------
 -- References
@@ -240,6 +241,26 @@ end
 ------------------------------------------------------------
 -- UI Controls
 ------------------------------------------------------------
+local inputText = ""
+
+local MiscInput = MiscTab:CreateInput({
+	Name = "Print Custom Text",
+	CurrentValue = "",
+	PlaceholderText = "Type something...",
+	RemoveTextAfterFocusLost = false,
+	Flag = "Input1",
+	Callback = function(Text)
+		inputText = tostring(Text or "")
+	end,
+})
+
+local MiscButton = MiscTab:CreateButton({
+	Name = "Print",
+	Callback = function()
+		print(inputText)
+	end,
+})
+
 MainTab:CreateSlider({
 	Name = "Move Speed",
 	Range = {25, 400},
