@@ -252,7 +252,7 @@ MainTab:CreateButton({
 --============================================================
 ConfigTab:CreateSlider({
 	Name = "Fly Speed",
-	Range = {50, 500},
+	Range = {50, 1000},
 	Increment = 10,
 	CurrentValue = FlySpeed,
 	Callback = function(v)
