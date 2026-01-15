@@ -297,22 +297,6 @@ ConfigTab:CreateSlider({
 	Callback = function(v) FlySpeed = v end
 })
 
-ConfigTab:CreateColorPicker({
-	Name = "GUI Theme Color",
-	Color = Color3.fromRGB(255, 0, 0),
-	Callback = function(color)
-		Rayfield:SetTheme("AccentColor", color)
-	end
-})
-
-ConfigTab:CreateButton({
-	Name = "Save Settings",
-	Callback = function()
-		Rayfield:SaveConfiguration()
-		Rayfield:Notify({ Title = "TixyHub", Content = "Settings saved successfully!", Duration = 3 })
-	end
-})
-
 ConfigTab:CreateButton({
 	Name = "Kill TixyHub",
 	Callback = function()
