@@ -92,7 +92,7 @@ MainTab:CreateDropdown({
 
 MainTab:CreateSlider({
 	Name = "Bump Velocity",
-	Range = {100, 9999},
+	Range = {100, 1000},
 	Increment = 25,
 	CurrentValue = BumpVelocity,
 	Callback = function(v)
