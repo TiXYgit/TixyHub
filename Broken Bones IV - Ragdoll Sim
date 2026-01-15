@@ -1,4 +1,6 @@
------------------------------------------------------------
+	local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+	
+	-----------------------------------------------------------
 	-- Window Setup
 	-----------------------------------------------------------
 	local MainWindow = Rayfield:CreateWindow({
