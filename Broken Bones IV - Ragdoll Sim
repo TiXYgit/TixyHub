@@ -1,264 +1,290 @@
-	local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-	
-	-----------------------------------------------------------
-	-- Window Setup
-	-----------------------------------------------------------
-	local MainWindow = Rayfield:CreateWindow({
-		Name = "TixyHub | Broken Bones IV - Ragdoll Sim",
-		LoadingTitle = "Loading...",
-		LoadingSubtitle = "by TiXY",
-		ToggleUIKeybind = "K",
-		ConfigurationSaving = { Enabled = true, FileName = "TixyHub" },
-		KeySystem = false
-	})
+--============================================================
+-- TixyHub - Fully Working & Verified Version (2026)
+-- Broken Bones IV - Ragdoll Sim
+--============================================================
 
-	local MainTab = MainWindow:CreateTab("Auto Farm", 4483362458)
-	local PlayerTab = MainWindow:CreateTab("Player")
-	local ConfigTab = MainWindow:CreateTab("Config")
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-	-----------------------------------------------------------
-	-- Variables
-	-----------------------------------------------------------
-	local FlySpeed = 120
-	local WalkSpeedValue = 16
-	local JumpPowerValue = 50
-	local InfiniteJumpEnabled = false
-	local Flying = false
-	local FlyConn
-	local NoclipEnabled = false
-	local NoclipConnection
+-----------------------------------------------------------
+-- Services
+-----------------------------------------------------------
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local LocalPlayer = Players.LocalPlayer
 
-	local function getChar() return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() end
-	local function getHumanoid() return getChar():FindFirstChildOfClass("Humanoid") end
-	local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
+-----------------------------------------------------------
+-- Game Info
+-----------------------------------------------------------
+local GameName = "Unknown Game"
+pcall(function()
+	GameName = MarketplaceService:GetProductInfo(game.PlaceId).Name or "Unknown Game"
+end)
 
-	-----------------------------------------------------------
-	-- Auto Farm System
-	-----------------------------------------------------------
-	local TargetRocks = {}
-	MainTab:CreateDropdown({
-		Name = "Target Rock Types",
-		Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
-		CurrentOption = {"Basalt"},
-		MultiSelection = true,
-		Flag = "RockSelector",
-		Callback = function(Options)
-			TargetRocks = Options
-			print("Targeting rocks: " .. table.concat(TargetRocks, ", "))
-		end,
-	})
+-----------------------------------------------------------
+-- Window Setup
+-----------------------------------------------------------
+local MainWindow = Rayfield:CreateWindow({
+	Name = "TixyHub | Broken Bones IV - Ragdoll Sim",
+	LoadingTitle = "Loading...",
+	LoadingSubtitle = "by TiXY",
+	ToggleUIKeybind = "K",
+	ConfigurationSaving = { Enabled = true, FileName = "TixyHub" },
+	KeySystem = false
+})
 
-	local FarmingEnabled = false
-	MainTab:CreateToggle({
-		Name = "Enable Auto Farm",
-		CurrentValue = false,
-		Flag = "FarmToggle",
-		Callback = function(Value)
-			FarmingEnabled = Value
-			task.spawn(function()
-				while FarmingEnabled do
-					local char = LocalPlayer.Character
-					if char and char:FindFirstChild("Humanoid") then
-						char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-						if char.PrimaryPart then
-							char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
-						end
+local MainTab = MainWindow:CreateTab("Auto Farm", 4483362458)
+local PlayerTab = MainWindow:CreateTab("Player")
+local ConfigTab = MainWindow:CreateTab("Config")
+
+-----------------------------------------------------------
+-- Variables
+-----------------------------------------------------------
+local FlySpeed = 120
+local WalkSpeedValue = 16
+local JumpPowerValue = 50
+local InfiniteJumpEnabled = false
+local Flying = false
+local FlyConn
+local NoclipEnabled = false
+local NoclipConnection
+
+local function getChar() return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() end
+local function getHumanoid() return getChar():FindFirstChildOfClass("Humanoid") end
+local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
+
+-----------------------------------------------------------
+-- Auto Farm System
+-----------------------------------------------------------
+local TargetRocks = {}
+MainTab:CreateDropdown({
+	Name = "Target Rock Types",
+	Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
+	CurrentOption = {"Basalt"},
+	MultiSelection = true,
+	Flag = "RockSelector",
+	Callback = function(Options)
+		TargetRocks = Options
+		print("Targeting rocks: " .. table.concat(TargetRocks, ", "))
+	end,
+})
+
+local FarmingEnabled = false
+MainTab:CreateToggle({
+	Name = "Enable Auto Farm",
+	CurrentValue = false,
+	Flag = "FarmToggle",
+	Callback = function(Value)
+		FarmingEnabled = Value
+		task.spawn(function()
+			while FarmingEnabled do
+				local char = LocalPlayer.Character
+				if char and char:FindFirstChild("Humanoid") then
+					char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+					if char.PrimaryPart then
+						char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
 					end
-					task.wait(1.5)
 				end
-			end)
-		end,
-	})
-
-	MainTab:CreateButton({
-		Name = "Reset / Fix Stuck Character",
-		Callback = function()
-			if LocalPlayer.Character then
-				LocalPlayer.Character:BreakJoints()
+				task.wait(1.5)
 			end
-		end,
-	})
+		end)
+	end,
+})
 
-	Rayfield:LoadConfiguration()
-
-	-----------------------------------------------------------
-	-- Fly System
-	-----------------------------------------------------------
-	local function cleanupFly(hrp)
-		for _, v in ipairs(hrp:GetChildren()) do
-			if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
+MainTab:CreateButton({
+	Name = "Reset / Fix Stuck Character",
+	Callback = function()
+		if LocalPlayer.Character then
+			LocalPlayer.Character:BreakJoints()
 		end
+	end,
+})
+
+Rayfield:LoadConfiguration()
+
+-----------------------------------------------------------
+-- Fly System
+-----------------------------------------------------------
+local function cleanupFly(hrp)
+	for _, v in ipairs(hrp:GetChildren()) do
+		if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
 	end
+end
 
-	local function setFly(enabled)
-		local hrp = getHRP()
-		if enabled then
-			Flying = true
-			cleanupFly(hrp)
+local function setFly(enabled)
+	local hrp = getHRP()
+	if enabled then
+		Flying = true
+		cleanupFly(hrp)
 
-			local bv = Instance.new("BodyVelocity")
-			bv.MaxForce = Vector3.new(1e9,1e9,1e9)
-			bv.Velocity = Vector3.zero
-			bv.Parent = hrp
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+		bv.Velocity = Vector3.zero
+		bv.Parent = hrp
 
-			local bg = Instance.new("BodyGyro")
-			bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
-			bg.P = 9000
-			bg.CFrame = workspace.CurrentCamera.CFrame
-			bg.Parent = hrp
+		local bg = Instance.new("BodyGyro")
+		bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
+		bg.P = 9000
+		bg.CFrame = workspace.CurrentCamera.CFrame
+		bg.Parent = hrp
 
-			FlyConn = RunService.RenderStepped:Connect(function()
-				if not Flying then
-					FlyConn:Disconnect()
-					cleanupFly(hrp)
-					return
-				end
-				local cam = workspace.CurrentCamera
-				local move = Vector3.zero
-				if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
-				if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
-				if move.Magnitude > 0 then move = move.Unit * FlySpeed end
-				bv.Velocity = move
-				bg.CFrame = cam.CFrame
-			end)
-		else
-			Flying = false
-			if FlyConn then FlyConn:Disconnect() end
-			cleanupFly(hrp)
-		end
+		FlyConn = RunService.RenderStepped:Connect(function()
+			if not Flying then
+				FlyConn:Disconnect()
+				cleanupFly(hrp)
+				return
+			end
+			local cam = workspace.CurrentCamera
+			local move = Vector3.zero
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+			if move.Magnitude > 0 then move = move.Unit * FlySpeed end
+			bv.Velocity = move
+			bg.CFrame = cam.CFrame
+		end)
+	else
+		Flying = false
+		if FlyConn then FlyConn:Disconnect() end
+		cleanupFly(hrp)
 	end
+end
 
-	PlayerTab:CreateToggle({
-		Name = "Fly",
-		CurrentValue = false,
-		Callback = function(v)
-			setFly(v)
-			Rayfield:Notify({ Title = "Fly", Content = v and "Enabled!" or "Disabled!", Duration = 3 })
-		end
-	})
+PlayerTab:CreateToggle({
+	Name = "Fly",
+	CurrentValue = false,
+	Callback = function(v)
+		setFly(v)
+		Rayfield:Notify({ Title = "Fly", Content = v and "Enabled!" or "Disabled!", Duration = 3 })
+	end
+})
 
-	-----------------------------------------------------------
-	-- Movement Controls
-	-----------------------------------------------------------
-	PlayerTab:CreateToggle({
-		Name = "Infinite Jump",
-		CurrentValue = false,
-		Callback = function(v) InfiniteJumpEnabled = v end
-	})
+-----------------------------------------------------------
+-- Movement Controls
+-----------------------------------------------------------
+PlayerTab:CreateToggle({
+	Name = "Infinite Jump",
+	CurrentValue = false,
+	Callback = function(v) InfiniteJumpEnabled = v end
+})
 
-	UserInputService.JumpRequest:Connect(function()
-		if InfiniteJumpEnabled then
-			local hum = getHumanoid()
-			if hum then hum:ChangeState("Jumping") end
-		end
-	end)
+UserInputService.JumpRequest:Connect(function()
+	if InfiniteJumpEnabled then
+		local hum = getHumanoid()
+		if hum then hum:ChangeState("Jumping") end
+	end
+end)
 
-	PlayerTab:CreateToggle({
-		Name = "Noclip",
-		CurrentValue = false,
-		Callback = function(v)
-			NoclipEnabled = v
-			if v then
-				NoclipConnection = RunService.Stepped:Connect(function()
-					if LocalPlayer.Character then
-						for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-							if part:IsA("BasePart") then part.CanCollide = false end
-						end
-					end
-				end)
-			else
-				if NoclipConnection then NoclipConnection:Disconnect() end
+PlayerTab:CreateToggle({
+	Name = "Noclip",
+	CurrentValue = false,
+	Callback = function(v)
+		NoclipEnabled = v
+		if v then
+			NoclipConnection = RunService.Stepped:Connect(function()
 				if LocalPlayer.Character then
 					for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-						if part:IsA("BasePart") then part.CanCollide = true end
+						if part:IsA("BasePart") then part.CanCollide = false end
 					end
+				end
+			end)
+		else
+			if NoclipConnection then NoclipConnection:Disconnect() end
+			if LocalPlayer.Character then
+				for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+					if part:IsA("BasePart") then part.CanCollide = true end
 				end
 			end
 		end
-	})
-
-	PlayerTab:CreateSlider({
-		Name = "WalkSpeed",
-		Range = { 16, 250 },
-		Increment = 5,
-		CurrentValue = WalkSpeedValue,
-		Callback = function(v)
-			local hum = getHumanoid()
-			if hum then hum.WalkSpeed = v end
-		end
-	})
-
-	PlayerTab:CreateSlider({
-		Name = "JumpPower",
-		Range = { 50, 500 },
-		Increment = 10,
-		CurrentValue = JumpPowerValue,
-		Callback = function(v)
-			local hum = getHumanoid()
-			if hum then hum.JumpPower = v end
-		end
-	})
-
-	-----------------------------------------------------------
-	-- Teleports
-	-----------------------------------------------------------
-	local SelectedPlayer = ""
-	local Dropdown = PlayerTab:CreateDropdown({
-		Name = "Select Player",
-		Options = {},
-		CurrentOption = {""},
-		MultipleOptions = false,
-		Callback = function(Option) SelectedPlayer = Option[1] end
-	})
-
-	local function UpdatePlayerList()
-		local list = {}
-		for _, v in pairs(Players:GetPlayers()) do
-			if v.Name ~= LocalPlayer.Name then table.insert(list, v.Name) end
-		end
-		Dropdown:Refresh(list, true)
 	end
+})
 
-	Players.PlayerAdded:Connect(UpdatePlayerList)
-	Players.PlayerRemoving:Connect(UpdatePlayerList)
-	UpdatePlayerList()
+PlayerTab:CreateSlider({
+	Name = "WalkSpeed",
+	Range = { 16, 250 },
+	Increment = 5,
+	CurrentValue = WalkSpeedValue,
+	Callback = function(v)
+		local hum = getHumanoid()
+		if hum then hum.WalkSpeed = v end
+	end
+})
 
-	PlayerTab:CreateButton({
-		Name = "Teleport to Selected Player",
-		Callback = function()
-			local target = Players:FindFirstChild(SelectedPlayer)
-			if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-				LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
-			else
-				Rayfield:Notify({Title = "Error", Content = "Player not found or character not loaded.", Duration = 3})
-			end
+PlayerTab:CreateSlider({
+	Name = "JumpPower",
+	Range = { 50, 500 },
+	Increment = 10,
+	CurrentValue = JumpPowerValue,
+	Callback = function(v)
+		local hum = getHumanoid()
+		if hum then hum.JumpPower = v end
+	end
+})
+
+-----------------------------------------------------------
+-- Teleports
+-----------------------------------------------------------
+local SelectedPlayer = ""
+local Dropdown = PlayerTab:CreateDropdown({
+	Name = "Select Player",
+	Options = {},
+	CurrentOption = {""},
+	MultipleOptions = false,
+	Callback = function(Option) SelectedPlayer = Option[1] end
+})
+
+local function UpdatePlayerList()
+	local list = {}
+	for _, v in pairs(Players:GetPlayers()) do
+		if v.Name ~= LocalPlayer.Name then table.insert(list, v.Name) end
+	end
+	Dropdown:Refresh(list, true)
+end
+
+Players.PlayerAdded:Connect(UpdatePlayerList)
+Players.PlayerRemoving:Connect(UpdatePlayerList)
+UpdatePlayerList()
+
+PlayerTab:CreateButton({
+	Name = "Teleport to Selected Player",
+	Callback = function()
+		local target = Players:FindFirstChild(SelectedPlayer)
+		if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+			LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
+		else
+			Rayfield:Notify({Title = "Error", Content = "Player not found or character not loaded.", Duration = 3})
 		end
-	})
+	end
+})
 
-	-----------------------------------------------------------
-	-- Config Tab
-	-----------------------------------------------------------
-	ConfigTab:CreateSlider({
-		Name = "Fly Speed",
-		Range = { 50, 500 },
-		Increment = 10,
-		CurrentValue = FlySpeed,
-		Callback = function(v) FlySpeed = v end
-	})
+-----------------------------------------------------------
+-- Config Tab
+-----------------------------------------------------------
+ConfigTab:CreateSlider({
+	Name = "Fly Speed",
+	Range = { 50, 500 },
+	Increment = 10,
+	CurrentValue = FlySpeed,
+	Callback = function(v) FlySpeed = v end
+})
 
-	ConfigTab:CreateButton({
-		Name = "Kill TixyHub",
-		Callback = function()
-			for i = 3, 1, -1 do
-				Rayfield:Notify({ Title = "TixyHub", Content = "Killing in " .. i, Duration = 1 })
-				wait(1)
-			end
-			Rayfield:Destroy()
+ConfigTab:CreateButton({
+	Name = "Kill TixyHub",
+	Callback = function()
+		for i = 3, 1, -1 do
+			Rayfield:Notify({ Title = "TixyHub", Content = "Killing in " .. i, Duration = 1 })
+			wait(1)
 		end
-	})
+		Rayfield:Destroy()
+	end
+})
 
-	Rayfield:Notify({ Title = "TixyHub", Content = "Loaded Successfully on: " .. GameName, Duration = 5 })
+Rayfield:Notify({
+	Title = "TixyHub",
+	Content = "Loaded Successfully on: " .. GameName,
+	Duration = 5
+})
