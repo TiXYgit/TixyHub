@@ -35,11 +35,11 @@ local MainWindow = Rayfield:CreateWindow({
 	KeySettings = {
 		Title = "TixyHub | Key System",
 		Subtitle = "Authentication Required",
-		Note = "Key Is: FTOT",
+		Note = "Key is: FTOT",
 		FileName = "TixyHubKey",
 		SaveKey = true,
 		GrabKeyFromSite = true,
-		Key = {"https://raw.githubusercontent.com/TiXYgit/TixyHub/refs/heads/main/Key"} --Grab from raw website & put key here
+		Key = {"https://raw.githubusercontent.com/TiXYgit/TixyHub/refs/heads/main/Key"} 
 	}
 })
 
@@ -64,6 +64,7 @@ local NoclipConnection
 local HighlightEnabled = false
 local HighlightColor = Color3.fromRGB(255,255,0)
 local HighlightRefreshLoop
+local BumpVelocity = 300
 
 local function getChar() return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() end
 local function getHumanoid() return getChar():FindFirstChildOfClass("Humanoid") end
@@ -72,15 +73,31 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 -----------------------------------------------------------
 -- Auto Farm System
 -----------------------------------------------------------
-local TargetRocks = {}
+local TargetRocks = {"Basalt"}
+
 MainTab:CreateDropdown({
-	Name = "Target Rock Types",
+	Name = "Target Rock Type",
 	Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
 	CurrentOption = {"Basalt"},
-	MultiSelection = true,
-	Callback = function(Options)
-		TargetRocks = Options
-	end,
+	MultiSelection = false,
+	Callback = function(Option)
+		TargetRocks = Option
+		Rayfield:Notify({
+			Title = "Rock Type Selected",
+			Content = "Targeting " .. Option[1],
+			Duration = 3
+		})
+	end
+})
+
+MainTab:CreateSlider({
+	Name = "Bump Velocity",
+	Range = {100, 9999},
+	Increment = 25,
+	CurrentValue = BumpVelocity,
+	Callback = function(v)
+		BumpVelocity = v
+	end
 })
 
 local FarmingEnabled = false
@@ -95,13 +112,13 @@ MainTab:CreateToggle({
 				if char and char:FindFirstChild("Humanoid") then
 					char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 					if char.PrimaryPart then
-						char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
+						char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, BumpVelocity)
 					end
 				end
 				task.wait(1.5)
 			end
 		end)
-	end,
+	end
 })
 
 MainTab:CreateButton({
@@ -110,7 +127,7 @@ MainTab:CreateButton({
 		if LocalPlayer.Character then
 			LocalPlayer.Character:BreakJoints()
 		end
-	end,
+	end
 })
 
 -----------------------------------------------------------
