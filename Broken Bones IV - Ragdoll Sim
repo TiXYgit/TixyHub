@@ -49,6 +49,8 @@ local Flying = false
 local FlyConn
 local NoclipEnabled = false
 local NoclipConnection
+local HighlightEnabled = false
+local HighlightObject
 
 local function getChar() return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() end
 local function getHumanoid() return getChar():FindFirstChildOfClass("Humanoid") end
@@ -58,51 +60,48 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 -- Auto Farm System
 -----------------------------------------------------------
 local TargetRocks = {}
-
--- MultiSelection fix: CurrentOption must be a table
 MainTab:CreateDropdown({
-   Name = "Target Rock Types",
-   Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
-   CurrentOption = {"Basalt"}, 
-   MultiSelection = true, -- Verified 2026 parameter
-   Flag = "RockSelector",
-   Callback = function(Options)
-      TargetRocks = Options
-      print("Targeting rocks: " .. table.concat(TargetRocks, ", "))
-   end,
+	Name = "Target Rock Types",
+	Options = {"Basalt", "Igneous", "Sedimentary", "Metamorphic", "Icy Rocks", "Spiky Rocks"},
+	CurrentOption = {"Basalt"},
+	MultiSelection = true,
+	Flag = "RockSelector",
+	Callback = function(Options)
+		TargetRocks = Options
+	end,
 })
 
 local FarmingEnabled = false
 MainTab:CreateToggle({
-   Name = "Enable Auto Farm",
-   CurrentValue = false,
-   Flag = "FarmToggle",
-   Callback = function(Value)
-      FarmingEnabled = Value
-      task.spawn(function()
-         while FarmingEnabled do
-            local player = game.Players.LocalPlayer
-            local char = player.Character
-            if char and char:FindFirstChild("Humanoid") then
-               -- Force Ragdoll state to ensure bone breaks register
-               char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-               -- Physics push toward rocks
-               char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
-            end
-            task.wait(1.5) -- Delay to prevent physics lag
-         end
-      end)
-   end,
+	Name = "Enable Auto Farm",
+	CurrentValue = false,
+	Flag = "FarmToggle",
+	Callback = function(Value)
+		FarmingEnabled = Value
+		task.spawn(function()
+			while FarmingEnabled do
+				local char = LocalPlayer.Character
+				if char and char:FindFirstChild("Humanoid") then
+					char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+					if char.PrimaryPart then
+						char.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0, 0, 300)
+					end
+				end
+				task.wait(1.5)
+			end
+		end)
+	end,
 })
 
 MainTab:CreateButton({
-   Name = "Reset / Fix Stuck Char",
-   Callback = function()
-      if game.Players.LocalPlayer.Character then
-         game.Players.LocalPlayer.Character:BreakJoints()
-      end
-   end,
+	Name = "Reset / Fix Stuck Character",
+	Callback = function()
+		if LocalPlayer.Character then
+			LocalPlayer.Character:BreakJoints()
+		end
+	end,
 })
+
 -----------------------------------------------------------
 -- Fly System
 -----------------------------------------------------------
@@ -117,12 +116,10 @@ local function setFly(enabled)
 	if enabled then
 		Flying = true
 		cleanupFly(hrp)
-
 		local bv = Instance.new("BodyVelocity")
 		bv.MaxForce = Vector3.new(1e9,1e9,1e9)
 		bv.Velocity = Vector3.zero
 		bv.Parent = hrp
-
 		local bg = Instance.new("BodyGyro")
 		bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
 		bg.P = 9000
@@ -130,11 +127,7 @@ local function setFly(enabled)
 		bg.Parent = hrp
 
 		FlyConn = RunService.RenderStepped:Connect(function()
-			if not Flying then
-				FlyConn:Disconnect()
-				cleanupFly(hrp)
-				return
-			end
+			if not Flying then FlyConn:Disconnect(); cleanupFly(hrp); return end
 			local cam = workspace.CurrentCamera
 			local move = Vector3.zero
 			if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
@@ -160,6 +153,38 @@ PlayerTab:CreateToggle({
 	Callback = function(v)
 		setFly(v)
 		Rayfield:Notify({ Title = "Fly", Content = v and "Enabled!" or "Disabled!", Duration = 3 })
+	end
+})
+
+-----------------------------------------------------------
+-- Highlight System
+-----------------------------------------------------------
+PlayerTab:CreateToggle({
+	Name = "Highlight Player",
+	CurrentValue = false,
+	Callback = function(v)
+		HighlightEnabled = v
+		if v then
+			if not HighlightObject then
+				HighlightObject = Instance.new("Highlight")
+				HighlightObject.FillColor = Color3.fromRGB(255, 255, 0)
+				HighlightObject.FillTransparency = 0.5
+				HighlightObject.OutlineColor = Color3.fromRGB(255, 255, 255)
+				HighlightObject.Parent = getChar()
+			end
+		else
+			if HighlightObject then HighlightObject:Destroy(); HighlightObject = nil end
+		end
+	end
+})
+
+ConfigTab:CreateColorPicker({
+	Name = "Highlight Color",
+	Color = Color3.fromRGB(255, 255, 0),
+	Callback = function(color)
+		if HighlightObject then
+			HighlightObject.FillColor = color
+		end
 	end
 })
 
@@ -272,6 +297,22 @@ ConfigTab:CreateSlider({
 	Callback = function(v) FlySpeed = v end
 })
 
+ConfigTab:CreateColorPicker({
+	Name = "GUI Theme Color",
+	Color = Color3.fromRGB(255, 0, 0),
+	Callback = function(color)
+		Rayfield:SetTheme("AccentColor", color)
+	end
+})
+
+ConfigTab:CreateButton({
+	Name = "Save Settings",
+	Callback = function()
+		Rayfield:SaveConfiguration()
+		Rayfield:Notify({ Title = "TixyHub", Content = "Settings saved successfully!", Duration = 3 })
+	end
+})
+
 ConfigTab:CreateButton({
 	Name = "Kill TixyHub",
 	Callback = function()
@@ -283,6 +324,9 @@ ConfigTab:CreateButton({
 	end
 })
 
+-----------------------------------------------------------
+-- Notification
+-----------------------------------------------------------
 Rayfield:Notify({
 	Title = "TixyHub",
 	Content = "Loaded Successfully on: " .. GameName,
