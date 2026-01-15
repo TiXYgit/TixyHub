@@ -130,6 +130,8 @@ MainTab:CreateButton({
 	end
 })
 
+local MainLabel = MainTab:CreateLabel("How To Use: 1. jump off the cliff 2. wait for regdoll 3. when regdoll enable auto farm.", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
+
 -----------------------------------------------------------
 -- Highlight System (All Players + Color Picker)
 -----------------------------------------------------------
