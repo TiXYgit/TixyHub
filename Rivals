@@ -1,0 +1,258 @@
+--------------------------------------------------
+-- SERVICES
+--------------------------------------------------
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+--------------------------------------------------
+-- LOAD RAYFIELD (OFFICIAL)
+--------------------------------------------------
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+--------------------------------------------------
+-- WINDOW
+--------------------------------------------------
+local Window = Rayfield:CreateWindow({
+    Name = "TixyHub | Rivals",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "Rayfield",
+    ToggleUIKeybind = Enum.KeyCode.K,
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "TixyHub",
+        FileName = "TixyHub"
+    }
+})
+
+--------------------------------------------------
+-- TABS
+--------------------------------------------------
+local CombatTab   = Window:CreateTab("Combat", 4483362458)
+local RenderTab   = Window:CreateTab("Render", 4483362458)
+local MovementTab = Window:CreateTab("Movement", 4483362458)
+
+--------------------------------------------------
+-- STATE
+--------------------------------------------------
+local AimbotEnabled = false
+local AimbotFOV = 250
+local AimbotStrength = 0.25
+local TargetPart = "Head"
+local TeamCheck = true
+
+local TriggerEnabled = false
+local ESPEnabled = false
+local BhopEnabled = false
+
+--------------------------------------------------
+-- HELPERS
+--------------------------------------------------
+local function getChar(plr)
+    return plr.Character
+end
+
+local function isEnemy(plr)
+    if plr == LocalPlayer then return false end
+    if TeamCheck and plr.Team == LocalPlayer.Team then return false end
+    return true
+end
+
+--------------------------------------------------
+-- GET ENEMY PLAYERS
+--------------------------------------------------
+local function getEnemies()
+    local enemies = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if isEnemy(plr) then
+            local char = getChar(plr)
+            if char
+                and char:FindFirstChild("Humanoid")
+                and char.Humanoid.Health > 0
+                and char:FindFirstChild("HumanoidRootPart") then
+                table.insert(enemies, plr)
+            end
+        end
+    end
+    return enemies
+end
+
+--------------------------------------------------
+-- AIM ASSIST (PLAYERS)
+--------------------------------------------------
+local function aimAssist()
+    if not AimbotEnabled then return end
+
+    local center = Vector2.new(
+        Camera.ViewportSize.X / 2,
+        Camera.ViewportSize.Y / 2
+    )
+
+    local closestPart, bestDist = nil, AimbotFOV
+
+    for _, plr in ipairs(getEnemies()) do
+        local char = plr.Character
+        local part =
+            TargetPart == "Head"
+            and char:FindFirstChild("Head")
+            or char:FindFirstChild("HumanoidRootPart")
+
+        if part then
+            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    closestPart = part
+                end
+            end
+        end
+    end
+
+    if closestPart then
+        local camPos = Camera.CFrame.Position
+        local cf = CFrame.new(camPos, closestPart.Position)
+        Camera.CFrame = Camera.CFrame:Lerp(cf, AimbotStrength)
+    end
+end
+
+--------------------------------------------------
+-- TRIGGER (AUTO FIRE)
+--------------------------------------------------
+local function triggerFire()
+    if not TriggerEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then
+        tool:Activate()
+    end
+end
+
+--------------------------------------------------
+-- ESP (HIGHLIGHT PLAYERS)
+--------------------------------------------------
+local ESPObjects = {}
+
+local function clearESP()
+    for _, h in pairs(ESPObjects) do
+        if h then h:Destroy() end
+    end
+    table.clear(ESPObjects)
+end
+
+local function updateESP()
+    clearESP()
+    if not ESPEnabled then return end
+
+    for _, plr in ipairs(getEnemies()) do
+        local char = plr.Character
+        if char then
+            local h = Instance.new("Highlight")
+            h.Adornee = char
+            h.FillColor = Color3.fromRGB(255, 0, 0)
+            h.OutlineColor = Color3.fromRGB(255,255,255)
+            h.Parent = char
+            ESPObjects[plr] = h
+        end
+    end
+end
+
+--------------------------------------------------
+-- BHOP
+--------------------------------------------------
+local lastJump = 0
+local function bhop()
+    if not BhopEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.FloorMaterial ~= Enum.Material.Air then
+        if tick() - lastJump > 0.25 then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            lastJump = tick()
+        end
+    end
+end
+
+--------------------------------------------------
+-- UI : COMBAT
+--------------------------------------------------
+CombatTab:CreateToggle({
+    Name = "Aim Assist (Players)",
+    CurrentValue = false,
+    Callback = function(v) AimbotEnabled = v end
+})
+
+CombatTab:CreateDropdown({
+    Name = "Target Part",
+    Options = {"Head", "HumanoidRootPart"},
+    CurrentOption = "Head",
+    Callback = function(v) TargetPart = v end
+})
+
+CombatTab:CreateSlider({
+    Name = "FOV",
+    Range = {50, 800},
+    Increment = 10,
+    CurrentValue = 250,
+    Callback = function(v) AimbotFOV = v end
+})
+
+CombatTab:CreateSlider({
+    Name = "Strength",
+    Range = {0.05, 1},
+    Increment = 0.05,
+    CurrentValue = 0.25,
+    Callback = function(v) AimbotStrength = v end
+})
+
+RenderTab:CreateButton({
+    Name = "Refresh ESP",
+    CurrentValue = false,
+    Callback = function(v) TeamCheck = v end
+})
+
+CombatTab:CreateToggle({
+    Name = "Trigger Fire",
+    CurrentValue = false,
+    Callback = function(v) TriggerEnabled = v end
+})
+
+--------------------------------------------------
+-- UI : RENDER
+--------------------------------------------------
+RenderTab:CreateToggle({
+    Name = "ESP (Players)",
+    CurrentValue = false,
+    Callback = function(v)
+        ESPEnabled = v
+        updateESP()
+    end
+})
+
+--------------------------------------------------
+-- UI : MOVEMENT
+--------------------------------------------------
+MovementTab:CreateToggle({
+    Name = "Bhop",
+    CurrentValue = false,
+    Callback = function(v) BhopEnabled = v end
+})
+
+--------------------------------------------------
+-- MAIN LOOP
+--------------------------------------------------
+RunService.RenderStepped:Connect(function()
+    aimAssist()
+    triggerFire()
+    bhop()
+end)
+
+RunService.Heartbeat:Connect(updateESP)
+
+Rayfield:LoadConfiguration()
+print("✅ Rayfield Player-Target Dev Tools ACTIVE")
