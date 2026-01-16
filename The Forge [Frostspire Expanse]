@@ -1,6 +1,6 @@
 --============================================================
--- TixyHub | Frostspire Auto-Farm + Player System (2026 STABLE)
--- Game: The Forge (YOUR GAME)
+-- TixyHub | FULL DEV SCRIPT (2026) - FIXED & VERIFIED
+-- Game: The Forge
 --============================================================
 
 -- Load Rayfield
@@ -15,34 +15,10 @@ local UserInputService = game:GetService("UserInputService")
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local LocalPlayer = Players.LocalPlayer
-local GameName = "Unknown Game"
-pcall(function()
-	GameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
-end)
 
-------------------------------------------------------------
--- Window
-------------------------------------------------------------
-local Window = Rayfield:CreateWindow({
-	Name = "TixyHub | The Forge - Frostspire",
-	LoadingTitle = "Loading...",
-	LoadingSubtitle = "by TiXY",
-	ToggleUIKeybind = "K",
-	ConfigurationSaving = {
-		Enabled = true,
-		FolderName = "TixyHub",
-		FileName = "Frostspire"
-	},
-	KeySystem = false
-})
-
-local FarmTab   = Window:CreateTab("Farm", 4483362458)
-local PlayerTab = Window:CreateTab("Player", 4483362458)
-local ConfigTab = Window:CreateTab("Config", 4483362458)
-
-------------------------------------------------------------
--- Character Helpers
-------------------------------------------------------------
+----------------------------------------------------------------
+-- Helpers
+----------------------------------------------------------------
 local function getChar()
 	return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 end
@@ -55,13 +31,72 @@ local function getHRP()
 	return getChar():WaitForChild("HumanoidRootPart")
 end
 
-------------------------------------------------------------
--- =========================
--- AUTO FARM SYSTEM
--- =========================
-------------------------------------------------------------
+local function notify(t, c, d)
+	Rayfield:Notify({ Title = t, Content = c, Duration = d or 3 })
+end
 
-local RocksFolder = workspace:WaitForChild("Rocks"):WaitForChild("Island3RedCave")
+----------------------------------------------------------------
+-- Window
+----------------------------------------------------------------
+local GameName = "Unknown Game"
+pcall(function()
+	GameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+end)
+
+local Window = Rayfield:CreateWindow({
+	Name = "TixyHub | "..GameName,
+	LoadingTitle = "Loading...",
+	LoadingSubtitle = "by TiXY",
+	ToggleUIKeybind = "K",
+	ConfigurationSaving = {
+		Enabled = true,
+		FolderName = "TixyHub",
+		FileName = "TixyHub"
+	},
+	KeySystem = false
+})
+
+local FarmTab   = Window:CreateTab("Farm")
+local PlayerTab = Window:CreateTab("Player")
+local MiscTab   = Window:CreateTab("Misc")
+local ConfigTab = Window:CreateTab("Config")
+
+----------------------------------------------------------------
+-- Shared Noclip (Farm + Player)
+----------------------------------------------------------------
+local noclipFarm = false
+local noclipPlayer = false
+local noclipConn
+
+local function refreshNoclip()
+	local enable = noclipFarm or noclipPlayer
+	if enable and not noclipConn then
+		noclipConn = RunService.Stepped:Connect(function()
+			local char = LocalPlayer.Character
+			if not char then return end
+			for _, p in ipairs(char:GetDescendants()) do
+				if p:IsA("BasePart") then p.CanCollide = false end
+			end
+		end)
+	elseif not enable and noclipConn then
+		noclipConn:Disconnect()
+		noclipConn = nil
+	end
+end
+
+----------------------------------------------------------------
+-- FARM SYSTEM
+----------------------------------------------------------------
+local Rocks = workspace:WaitForChild("Rocks")
+local RedCave = Rocks:WaitForChild("Island3RedCave")
+
+local PeakFolders = {
+	Rocks:WaitForChild("Island3CavePeakEnd"),
+	Rocks:WaitForChild("Island3CavePeakLeft"),
+	Rocks:WaitForChild("Island3CavePeakRight"),
+	Rocks:WaitForChild("Island3CavePeakStart"),
+	Rocks:WaitForChild("Island3CavePeakStart01"),
+}
 
 local Knit = ReplicatedStorage:WaitForChild("Shared")
 	:WaitForChild("Packages"):WaitForChild("Knit")
@@ -70,161 +105,118 @@ local Knit = ReplicatedStorage:WaitForChild("Shared")
 local InventoryEvent = Knit.InventoryService.RE.Event
 local ToolActivatedRF = Knit.ToolService.RF.ToolActivated
 
-local AutoFarm = false
+local AutoFarmRed = false
+local AutoFarmPeak = false
+
 local MoveSpeed = 120
 local LandOffset = 1.5
 local SwingDelay = 0.25
 local MineTimeout = 10
 
-local activeTween, cfValue, applyConn, holdConn, noclipConn
-
-------------------------------------------------------------
--- Utility
-------------------------------------------------------------
-local function setNoclip(state)
-	if state then
-		if noclipConn then noclipConn:Disconnect() end
-		noclipConn = RunService.Stepped:Connect(function()
-			for _, p in ipairs(getChar():GetDescendants()) do
-				if p:IsA("BasePart") then
-					p.CanCollide = false
+local function getSpawnLocations(source)
+	local t = {}
+	if typeof(source) == "table" then
+		for _, f in ipairs(source) do
+			for _, v in ipairs(f:GetDescendants()) do
+				if v:IsA("BasePart") and v.Name == "SpawnLocation" then
+					table.insert(t, v)
 				end
 			end
-		end)
+		end
 	else
-		if noclipConn then noclipConn:Disconnect() noclipConn = nil end
-	end
-end
-
-local function stopAllMotion()
-	if applyConn then applyConn:Disconnect() applyConn = nil end
-	if activeTween then pcall(function() activeTween:Cancel() end) activeTween = nil end
-	if cfValue then cfValue:Destroy() cfValue = nil end
-	if holdConn then holdConn:Disconnect() holdConn = nil end
-
-	local hrp = getHRP()
-	hrp.AssemblyLinearVelocity = Vector3.zero
-	hrp.AssemblyAngularVelocity = Vector3.zero
-end
-
-------------------------------------------------------------
--- Movement
-------------------------------------------------------------
-local function moveTo(pos)
-	local hrp = getHRP()
-	stopAllMotion()
-
-	cfValue = Instance.new("CFrameValue")
-	cfValue.Value = hrp.CFrame
-
-	applyConn = RunService.Heartbeat:Connect(function()
-		hrp.CFrame = cfValue.Value
-	end)
-
-	local dist = (hrp.Position - pos).Magnitude
-	local time = math.clamp(dist / MoveSpeed, 0.1, 10)
-
-	activeTween = TweenService:Create(
-		cfValue,
-		TweenInfo.new(time, Enum.EasingStyle.Linear),
-		{Value = CFrame.new(pos)}
-	)
-
-	activeTween:Play()
-	activeTween.Completed:Wait()
-
-	stopAllMotion()
-end
-
-------------------------------------------------------------
--- Mining
-------------------------------------------------------------
-local function equipPickaxe()
-	InventoryEvent:FireServer({
-		"Pickaxe",
-		"Weapon",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"Inventory"
-	})
-end
-
-local function mineOnce()
-	ToolActivatedRF:InvokeServer("Pickaxe")
-end
-
-local function holdPosition()
-	local hrp = getHRP()
-	local lock = hrp.CFrame
-	holdConn = RunService.Heartbeat:Connect(function()
-		hrp.CFrame = lock
-		hrp.AssemblyLinearVelocity = Vector3.zero
-	end)
-end
-
-local function mineUntilDone(spawn)
-	holdPosition()
-	local start = tick()
-
-	while AutoFarm and spawn.Parent and tick() - start < MineTimeout do
-		if #spawn:GetChildren() == 0 then break end
-		equipPickaxe()
-		task.wait(0.05)
-		mineOnce()
-		task.wait(SwingDelay)
-	end
-
-	if holdConn then holdConn:Disconnect() holdConn = nil end
-end
-
-local function getSpawns()
-	local t = {}
-	for _, v in ipairs(RocksFolder:GetDescendants()) do
-		if v:IsA("BasePart") and v.Name == "SpawnLocation" then
-			table.insert(t, v)
+		for _, v in ipairs(source:GetDescendants()) do
+			if v:IsA("BasePart") and v.Name == "SpawnLocation" then
+				table.insert(t, v)
+			end
 		end
 	end
 	return t
 end
 
-------------------------------------------------------------
--- Farm UI
-------------------------------------------------------------
+local function moveTo(pos)
+	local hrp = getHRP()
+	local dist = (hrp.Position - pos).Magnitude
+	local time = math.clamp(dist / MoveSpeed, 0.1, 10)
+	local tween = TweenService:Create(
+		hrp,
+		TweenInfo.new(time, Enum.EasingStyle.Linear),
+		{ CFrame = CFrame.new(pos) }
+	)
+	tween:Play()
+	tween.Completed:Wait()
+end
+
+local function mineOnce()
+	pcall(function()
+		InventoryEvent:FireServer({"Pickaxe","Weapon","","","","","","","","","","Inventory"})
+		ToolActivatedRF:InvokeServer("Pickaxe")
+	end)
+end
+
+local function mineUntilDone(spawn)
+	local start = tick()
+	while spawn and spawn.Parent and tick() - start < MineTimeout do
+		if not (AutoFarmRed or AutoFarmPeak) then break end
+		if #spawn:GetChildren() == 0 then break end
+		mineOnce()
+		task.wait(SwingDelay)
+	end
+end
+
+----------------------------------------------------------------
+-- FARM UI
+----------------------------------------------------------------
+FarmTab:CreateLabel("Farm Areas")
+
 FarmTab:CreateToggle({
-	Name = "Auto Farm (All Rocks)",
-	CurrentValue = false,
+	Name = "Auto Farm - Red Cave",
 	Callback = function(v)
-		AutoFarm = v
-		if not v then
-			setNoclip(false)
-			stopAllMotion()
-			return
-		end
+		AutoFarmRed = v
+		if v then AutoFarmPeak = false end
+		noclipFarm = v
+		refreshNoclip()
 
-		setNoclip(true)
-
-		task.spawn(function()
-			local idx = 1
-			while AutoFarm do
-				local spawns = getSpawns()
-				if #spawns > 0 then
-					if idx > #spawns then idx = 1 end
-					local s = spawns[idx]
-					moveTo(s.Position + Vector3.new(0, LandOffset, 0))
+		if v then
+			task.spawn(function()
+				local i = 1
+				while AutoFarmRed do
+					local s = getSpawnLocations(RedCave)
+					if #s > 0 then
+						if i > #s then i = 1 end
+						moveTo(s[i].Position + Vector3.new(0, LandOffset, 0))
+						mineUntilDone(s[i])
+						i += 1
+					end
 					task.wait(0.1)
-					mineUntilDone(s)
-					idx += 1
 				end
-				task.wait(0.1)
-			end
-		end)
+			end)
+		end
+	end
+})
+
+FarmTab:CreateToggle({
+	Name = "Auto Farm - The Peak",
+	Callback = function(v)
+		AutoFarmPeak = v
+		if v then AutoFarmRed = false end
+		noclipFarm = v
+		refreshNoclip()
+
+		if v then
+			task.spawn(function()
+				local i = 1
+				while AutoFarmPeak do
+					local s = getSpawnLocations(PeakFolders)
+					if #s > 0 then
+						if i > #s then i = 1 end
+						moveTo(s[i].Position + Vector3.new(0, LandOffset, 0))
+						mineUntilDone(s[i])
+						i += 1
+					end
+					task.wait(0.1)
+				end
+			end)
+		end
 	end
 })
 
@@ -236,88 +228,39 @@ FarmTab:CreateSlider({
 	Callback = function(v) MoveSpeed = v end
 })
 
-------------------------------------------------------------
--- =========================
--- PLAYER TAB
--- =========================
-------------------------------------------------------------
+----------------------------------------------------------------
+-- PLAYER TAB (FULL)
+----------------------------------------------------------------
+PlayerTab:CreateLabel("Movement")
 
-local FlySpeed = 120
-local Flying = false
-local FlyConn
+local WalkSpeed = 16
+local JumpPower = 50
 local InfiniteJump = false
-local Noclip = false
-local NoclipConn
 
-------------------------------------------------------------
--- Fly
-------------------------------------------------------------
-local function stopFly()
-	if FlyConn then FlyConn:Disconnect() FlyConn = nil end
-	local hrp = getHRP()
-	for _, v in ipairs(hrp:GetChildren()) do
-		if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
-			v:Destroy()
-		end
+PlayerTab:CreateSlider({
+	Name = "WalkSpeed",
+	Range = {16, 300},
+	Increment = 5,
+	CurrentValue = WalkSpeed,
+	Callback = function(v)
+		WalkSpeed = v
+		local hum = getHum()
+		if hum then hum.WalkSpeed = v end
 	end
-end
-
-local function setFly(state)
-	local hrp = getHRP()
-	if not state then
-		Flying = false
-		stopFly()
-		return
-	end
-
-	Flying = true
-	stopFly()
-
-	local bv = Instance.new("BodyVelocity", hrp)
-	bv.MaxForce = Vector3.new(1e9,1e9,1e9)
-
-	local bg = Instance.new("BodyGyro", hrp)
-	bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
-	bg.P = 9000
-
-	FlyConn = RunService.RenderStepped:Connect(function()
-		if not Flying then return end
-		local cam = workspace.CurrentCamera
-		local move = Vector3.zero
-
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.yAxis end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.yAxis end
-
-		if move.Magnitude > 0 then
-			bv.Velocity = move.Unit * FlySpeed
-		else
-			bv.Velocity = Vector3.zero
-		end
-
-		bg.CFrame = cam.CFrame
-	end)
-end
-
-PlayerTab:CreateToggle({
-	Name = "Fly",
-	Callback = function(v) setFly(v) end
 })
 
 PlayerTab:CreateSlider({
-	Name = "Fly Speed",
-	Range = {50, 1000},
+	Name = "JumpPower",
+	Range = {50, 500},
 	Increment = 10,
-	CurrentValue = FlySpeed,
-	Callback = function(v) FlySpeed = v end
+	CurrentValue = JumpPower,
+	Callback = function(v)
+		JumpPower = v
+		local hum = getHum()
+		if hum then hum.JumpPower = v end
+	end
 })
 
-------------------------------------------------------------
--- Movement
-------------------------------------------------------------
 PlayerTab:CreateToggle({
 	Name = "Infinite Jump",
 	Callback = function(v) InfiniteJump = v end
@@ -331,62 +274,174 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 PlayerTab:CreateToggle({
-	Name = "Noclip",
+	Name = "Noclip (Player)",
 	Callback = function(v)
-		Noclip = v
-		if v then
-			NoclipConn = RunService.Stepped:Connect(function()
-				for _, p in ipairs(getChar():GetDescendants()) do
-					if p:IsA("BasePart") then p.CanCollide = false end
-				end
-			end)
-		else
-			if NoclipConn then NoclipConn:Disconnect() end
+		noclipPlayer = v
+		refreshNoclip()
+	end
+})
+
+-- Fly
+PlayerTab:CreateLabel("Fly")
+
+local FlySpeed = 120
+local Flying = false
+local FlyConn
+
+local function stopFly()
+	if FlyConn then FlyConn:Disconnect() FlyConn = nil end
+	local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	for _, v in ipairs(hrp:GetChildren()) do
+		if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
+	end
+end
+
+local function setFly(v)
+	Flying = v
+	if not v then stopFly() return end
+
+	stopFly()
+	local hrp = getHRP()
+
+	local bv = Instance.new("BodyVelocity", hrp)
+	bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+
+	local bg = Instance.new("BodyGyro", hrp)
+	bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
+	bg.P = 9000
+
+	FlyConn = RunService.RenderStepped:Connect(function()
+		if not Flying then return end
+		local cam = workspace.CurrentCamera
+		local move = Vector3.zero
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.yAxis end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.yAxis end
+		bv.Velocity = move.Magnitude > 0 and move.Unit * FlySpeed or Vector3.zero
+		bg.CFrame = cam.CFrame
+	end)
+end
+
+PlayerTab:CreateToggle({ Name = "Fly", Callback = setFly })
+
+PlayerTab:CreateSlider({
+	Name = "Fly Speed",
+	Range = {50, 1000},
+	Increment = 10,
+	CurrentValue = FlySpeed,
+	Callback = function(v) FlySpeed = v end
+})
+
+----------------------------------------------------------------
+-- MISC TAB
+----------------------------------------------------------------
+MiscTab:CreateLabel("ESP")
+
+local ESPPlayers = false
+local ESPRocks = false
+local PlayerESP = {}
+local RockESP = {}
+
+local function clear(tbl)
+	for _, v in pairs(tbl) do pcall(function() v:Destroy() end) end
+	table.clear(tbl)
+end
+
+local function refreshPlayerESP()
+	clear(PlayerESP)
+	if not ESPPlayers then return end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and p.Character then
+			local hl = Instance.new("Highlight", workspace)
+			hl.Adornee = p.Character
+			hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+			PlayerESP[p] = hl
+		end
+	end
+end
+
+local function refreshRockESP()
+	clear(RockESP)
+	if not ESPRocks then return end
+	for _, s in ipairs(getSpawnLocations(RedCave)) do
+		local hl = Instance.new("Highlight", workspace)
+		hl.Adornee = s
+		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		RockESP[s] = hl
+	end
+end
+
+MiscTab:CreateToggle({
+	Name = "ESP Players",
+	Callback = function(v) ESPPlayers = v refreshPlayerESP() end
+})
+
+MiscTab:CreateToggle({
+	Name = "ESP Rocks",
+	Callback = function(v) ESPRocks = v refreshRockESP() end
+})
+
+MiscTab:CreateLabel("Teleport")
+
+local Selected = ""
+
+local Dropdown = MiscTab:CreateDropdown({
+	Name = "Select Player",
+	Options = {},
+	CurrentOption = {""},
+	Callback = function(o) Selected = o[1] end
+})
+
+local function refreshDropdown()
+	local list = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then table.insert(list, p.Name) end
+	end
+	Dropdown:Refresh(list, true)
+end
+
+refreshDropdown()
+Players.PlayerAdded:Connect(refreshDropdown)
+Players.PlayerRemoving:Connect(refreshDropdown)
+
+MiscTab:CreateButton({
+	Name = "Teleport To Player",
+	Callback = function()
+		local t = Players:FindFirstChild(Selected)
+		if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then
+			getHRP().CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0,3,0)
 		end
 	end
 })
 
-PlayerTab:CreateSlider({
-	Name = "WalkSpeed",
-	Range = {16, 300},
-	Increment = 5,
-	CurrentValue = 16,
-	Callback = function(v)
-		local hum = getHum()
-		if hum then hum.WalkSpeed = v end
-	end
-})
-
-PlayerTab:CreateSlider({
-	Name = "JumpPower",
-	Range = {50, 500},
-	Increment = 10,
-	CurrentValue = 50,
-	Callback = function(v)
-		local hum = getHum()
-		if hum then hum.JumpPower = v end
-	end
-})
-
-------------------------------------------------------------
--- Config
-------------------------------------------------------------
+----------------------------------------------------------------
+-- CONFIG
+----------------------------------------------------------------
 ConfigTab:CreateButton({
-	Name = "Emergency Stop",
+	Name = "Emergency Stop (Auto Farm)",
 	Callback = function()
-		AutoFarm = false
+		AutoFarmRed = false
+		AutoFarmPeak = false
 		Flying = false
 		stopFly()
-		stopAllMotion()
-		setNoclip(false)
+		noclipFarm = false
+		noclipPlayer = false
+		refreshNoclip()
+		clear(PlayerESP)
+		clear(RockESP)
+		notify("Stopped", "Everything stopped safely", 3)
 	end
 })
 
-------------------------------------------------------------
--- Notify
-------------------------------------------------------------
-Rayfield:Notify({
-	Title = "TixyHub",
-	Content = "Loaded successfully on: "..GameName,
-	Duration = 5
+ConfigTab:CreateButton({
+	Name = "Kill UI",
+	Callback = function()
+		Rayfield:Destroy()
+	end
 })
+
+notify("TixyHub", "Loaded successfully", 5)
