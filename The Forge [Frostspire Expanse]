@@ -339,6 +339,44 @@ PlayerTab:CreateSlider({
 ----------------------------------------------------------------
 -- MISC TAB
 ----------------------------------------------------------------
+
+--============================================================
+-- STATE
+--============================================================
+local TextToPrint = ""
+
+--============================================================
+-- TEXTBOX
+--============================================================
+MiscTab:CreateInput({
+    Name = "Text to Print",
+    PlaceholderText = "Type anything here...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        TextToPrint = Text
+    end
+})
+
+--============================================================
+-- BUTTON
+--============================================================
+MiscTab:CreateButton({
+    Name = "PRINT TO CONSOLE",
+    Callback = function()
+        if TextToPrint == "" then
+            warn("[Rayfield Printer] Nothing to print")
+        else
+            print("[Rayfield Printer]:", TextToPrint)
+            Rayfield:Notify({
+                Title = "Printed",
+                Content = "Text printed to console",
+                Duration = 2
+            })
+        end
+    end
+})
+
+
 MiscTab:CreateLabel("ESP")
 
 local ESPPlayers = false
