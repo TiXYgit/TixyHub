@@ -344,6 +344,12 @@ PlayerTab:CreateSlider({
 -- STATE
 --============================================================
 local TextToPrint = ""
+local DisplayLabel -- reference to label
+
+--============================================================
+-- VISIBLE OUTPUT LABEL
+--============================================================
+DisplayLabel = MiscTab:CreateLabel("Waiting for input...")
 
 --============================================================
 -- TEXTBOX (INPUT)
@@ -358,36 +364,41 @@ MiscTab:CreateInput({
 })
 
 --============================================================
--- BUTTON: PRINT [PLAYER NAME]: TEXT
+-- BUTTON: SHOW ON SCREEN + PRINT
 --============================================================
 MiscTab:CreateButton({
-    Name = "PRINT TO CONSOLE",
+    Name = "SHOW MESSAGE",
     Callback = function()
         local player = game.Players.LocalPlayer
 
         if TextToPrint == "" then
-            warn("[TixyHub] Nothing to print")
+            DisplayLabel:Set("⚠️ Nothing to show")
             return
         end
 
-        print("[" .. player.Name .. "]: " .. TextToPrint)
+        local message = "[" .. player.Name .. "]: " .. TextToPrint
+
+        -- Show to player (VISIBLE)
+        DisplayLabel:Set(message)
+
+        -- Optional: still print to console
+        print(message)
 
         Rayfield:Notify({
-            Title = "Printed",
-            Content = "Printed as [" .. player.Name .. "]",
+            Title = "Message Shown",
+            Content = "Displayed on screen",
             Duration = 2
         })
     end
 })
 
 --============================================================
--- EXTRA: PRINT PLAYER NAME ONLY
+-- EXTRA: CLEAR SCREEN TEXT
 --============================================================
 MiscTab:CreateButton({
-    Name = "PRINT PLAYER NAME ONLY",
+    Name = "CLEAR MESSAGE",
     Callback = function()
-        local player = game.Players.LocalPlayer
-        print("[Player Name]:", player.Name)
+        DisplayLabel:Set("Cleared.")
     end
 })
 
