@@ -346,7 +346,7 @@ PlayerTab:CreateSlider({
 local TextToPrint = ""
 
 --============================================================
--- TEXTBOX
+-- TEXTBOX (INPUT)
 --============================================================
 MiscTab:CreateInput({
     Name = "Text to Print",
@@ -358,21 +358,36 @@ MiscTab:CreateInput({
 })
 
 --============================================================
--- BUTTON
+-- BUTTON: PRINT [PLAYER NAME]: TEXT
 --============================================================
 MiscTab:CreateButton({
     Name = "PRINT TO CONSOLE",
     Callback = function()
+        local player = game.Players.LocalPlayer
+
         if TextToPrint == "" then
-            warn("[Rayfield Printer] Nothing to print")
-        else
-            print("[Rayfield Printer]:", TextToPrint)
-            Rayfield:Notify({
-                Title = "Printed",
-                Content = "Text printed to console",
-                Duration = 2
-            })
+            warn("[TixyHub] Nothing to print")
+            return
         end
+
+        print("[" .. player.Name .. "]: " .. TextToPrint)
+
+        Rayfield:Notify({
+            Title = "Printed",
+            Content = "Printed as [" .. player.Name .. "]",
+            Duration = 2
+        })
+    end
+})
+
+--============================================================
+-- EXTRA: PRINT PLAYER NAME ONLY
+--============================================================
+MiscTab:CreateButton({
+    Name = "PRINT PLAYER NAME ONLY",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        print("[Player Name]:", player.Name)
     end
 })
 
